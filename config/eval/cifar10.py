@@ -3,8 +3,8 @@ import ml_collections
 def get_config():
 
     datasets_folder = 'path/to/datasets'
-    model_location = 'path/to/ckpt_0001999999.pt'
-    model_config_location = 'path/to/config/config_001.yaml'
+    model_location = '/home/groups/swl1/yixiuz/torch_fid/downloads/cifar10/checkpoints/ckpt_0001999999.pt'
+    model_config_location = '/home/groups/swl1/yixiuz/torch_fid/downloads/cifar10/config/config_001.yaml'
 
     config = ml_collections.ConfigDict()
     config.eval_name = 'CIFAR10'
@@ -31,6 +31,7 @@ def get_config():
 
     config.sampler = sampler = ml_collections.ConfigDict()
     sampler.name = 'PCTauLeaping' # TauLeaping or PCTauLeaping
+    # sampler.name = 'PCTauLeapingBarker'
     sampler.num_steps = 500
     sampler.min_t = 0.01
     sampler.eps_ratio = 1e-9

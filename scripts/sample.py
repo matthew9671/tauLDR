@@ -19,7 +19,7 @@ import lib.sampling.sampling as sampling
 import lib.sampling.sampling_utils as sampling_utils
 from PIL import Image
 
-save_samples_path = 'path/to/tauLDR_samples'
+save_samples_path = '/scratch/users/yixiuz/model_samples/cifar/birth_death'
 
 eval_cfg = get_eval_config()
 train_cfg = bookkeeping.load_ml_collections(Path(eval_cfg.train_config_path))
