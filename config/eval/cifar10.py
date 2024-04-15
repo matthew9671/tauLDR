@@ -30,8 +30,7 @@ def get_config():
     data.random_flips = False
 
     config.sampler = sampler = ml_collections.ConfigDict()
-    sampler.name = 'PCTauLeaping' # TauLeaping or PCTauLeaping
-    # sampler.name = 'PCTauLeapingBarker'
+    sampler.name = 'PCTauLeaping' # TauLeaping or PCTauLeaping, but PCTauLeaping has been changed to PCTauLeapingBirthDeath
     sampler.num_steps = 500
     sampler.min_t = 0.01
     sampler.eps_ratio = 1e-9

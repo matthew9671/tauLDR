@@ -19,13 +19,39 @@ import lib.sampling.sampling as sampling
 import lib.sampling.sampling_utils as sampling_utils
 from PIL import Image
 
-save_samples_path = '/scratch/users/yixiuz/model_samples/cifar/birth_death'
+import argparse
+
+# Create the parser
+parser = argparse.ArgumentParser()
+
+# Add arguments
+parser.add_argument('--sampler', type=str, default="BirthDeath", help='')
+parser.add_argument('--corrector-steps', type=int, default=10, help='')
+parser.add_argument('--entry-time', type=float, default=0.1, help='')
+parser.add_argument('--corrector-step-size', type=float, default=1.5, help='')
+
+# Parse the arguments
+args = parser.parse_args()
+
+save_samples_path = '/scratch/users/yixiuz/model_samples/cifar/' + args.sampler + "-" + str(args.corrector_steps) + "-stepsize-" + str(args.corrector_step_size)
+
+os.makedirs(save_samples_path, exist_ok=True)
+print("Sampler: {}".format(args.sampler))
+print("Number of corrector steps: {}".format(args.corrector_steps))
+print("Corrector entry time: {}".format(args.entry_time))
+print("Corrector step size multiplier: {}".format(args.corrector_step_size))
 
 eval_cfg = get_eval_config()
 train_cfg = bookkeeping.load_ml_collections(Path(eval_cfg.train_config_path))
 
 for item in eval_cfg.train_config_overrides:
     utils.set_in_nested_dict(train_cfg, item[0], item[1])
+
+# Override default configs
+eval_cfg.sampler.name = 'PCTauLeaping' + args.sampler
+eval_cfg.sampler.num_corrector_steps = args.corrector_steps
+eval_cfg.sampler.corrector_entry_time = args.entry_time
+eval_cfg.sampler.corrector_step_size_multiplier = args.corrector_step_size
 
 S = train_cfg.data.S
 device = torch.device(eval_cfg.device)
@@ -47,6 +73,7 @@ def imgtrans(x):
 total_samples = 0
 batch = 50
 sampler = sampling_utils.get_sampler(eval_cfg)
+
 while True:
     print(total_samples)
     samples, _, _ = sampler.sample(model, batch, 1)

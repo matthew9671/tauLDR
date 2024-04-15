@@ -120,9 +120,9 @@ class TauLeaping():
             return x_0max.detach().cpu().numpy().astype(int), x_hist, x0_hist
 
 @sampling_utils.register_sampler
-class PCTauLeaping():
+class PCTauLeapingBirthDeath():
     def __init__(self, cfg):
-        self.cfg =cfg
+        self.cfg = cfg
 
     def sample(self, model, N, num_intermediates):
         t = 1.0

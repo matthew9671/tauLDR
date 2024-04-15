@@ -2,9 +2,9 @@ import ml_collections
 
 def get_config():
 
-    pianoroll_dataset_path = 'path/to/pianoroll_dataset'
-    model_location = 'path/to/piano/checkpoints/ckpt_0000999999.pt'
-    model_config_location = 'path/to/piano/config/config_001.yaml'
+    pianoroll_dataset_path = '/home/groups/swl1/yixiuz/torch_fid/downloads/pianoroll_dataset'
+    model_location = '/home/groups/swl1/yixiuz/torch_fid/downloads/piano/checkpoints/ckpt_0000999999.pt'
+    model_config_location = '/home/groups/swl1/yixiuz/torch_fid/downloads/piano/config/config_001.yaml'
 
     config = ml_collections.ConfigDict()
     config.eval_name = 'piano'
