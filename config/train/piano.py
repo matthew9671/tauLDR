@@ -1,17 +1,17 @@
 import ml_collections
 
 def get_config():
-    save_directory = 'path/to/output' 
-    pianoroll_dataset_path = 'path/to/pianoroll_dataset'
+    save_directory = '/home/groups/swl1/yixiuz/torch_fid/experiments/piano'
+    pianoroll_dataset_path = '/home/groups/swl1/yixiuz/torch_fid/downloads/pianoroll_dataset'
 
 
     config = ml_collections.ConfigDict()
-    config.experiment_name = 'piano'
+    config.experiment_name = 'piano_test'
     config.save_location = save_directory
 
-    config.device = 'cpu'
+    config.device = 'cuda'
     config.distributed = False
-    config.num_gpus = 0
+    config.num_gpus = 1
 
     config.loss = loss = ml_collections.ConfigDict()
     loss.name = 'ConditionalAux'
@@ -75,7 +75,7 @@ def get_config():
     saving.checkpoint_archive_freq = 20000000
     # saving.log_low_freq = config.training.n_iters / 1000
     saving.log_low_freq = 1000
-    saving.low_freq_loggers = []
+    saving.low_freq_loggers = ["ConditionalDenoisingNoteSeq"]
     saving.prepare_to_resume_after_timeout = False
 
     return config

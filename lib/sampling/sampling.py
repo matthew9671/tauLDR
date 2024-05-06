@@ -320,7 +320,7 @@ class PCTauLeapingBarker():
                         torch.arange(S, device=device).repeat(N*D)
                     ].view(N, D, S)
 
-                    return transpose_forward_rates, reverse_rates, x_0max, scores
+                    return forward_rates, transpose_forward_rates, reverse_rates, x_0max, scores
 
                 def take_poisson_step(in_x, in_reverse_rates, in_h):
                     diffs = torch.arange(S, device=device).view(1,1,S) - in_x.view(N,D,1)
@@ -333,7 +333,7 @@ class PCTauLeapingBarker():
 
                     return x_new
 
-                transpose_forward_rates, reverse_rates, x_0max, _ = get_rates(x, t)
+                _, _, reverse_rates, x_0max, _ = get_rates(x, t)
 
                 if t in save_ts:
                     x_hist.append(x.detach().cpu().numpy())
@@ -343,8 +343,8 @@ class PCTauLeapingBarker():
 
                 if t <= corrector_entry_time:
                     for _ in range(num_corrector_steps):
-                        transpose_forward_rates, reverse_rates, _, scores = get_rates(x, t-h)
-                        corrector_rate = transpose_forward_rates * scores / (1 + scores)
+                        forward_rates, transpose_forward_rates, reverse_rates, _, scores = get_rates(x, t-h)
+                        corrector_rate = (transpose_forward_rates + forward_rates) / 2 * scores / (1 + scores)
                         corrector_rate[
                             torch.arange(N, device=device).repeat_interleave(D),
                             torch.arange(D, device=device).repeat(N),
@@ -441,7 +441,7 @@ class PCTauLeapingMPF():
                         torch.arange(S, device=device).repeat(N*D)
                     ].view(N, D, S)
 
-                    return transpose_forward_rates, reverse_rates, x_0max, scores
+                    return forward_rates, transpose_forward_rates, reverse_rates, x_0max, scores
 
                 def take_poisson_step(in_x, in_reverse_rates, in_h):
                     diffs = torch.arange(S, device=device).view(1,1,S) - in_x.view(N,D,1)
@@ -454,7 +454,7 @@ class PCTauLeapingMPF():
 
                     return x_new
 
-                transpose_forward_rates, reverse_rates, x_0max, _ = get_rates(x, t)
+                _, _, reverse_rates, x_0max, _ = get_rates(x, t)
 
                 if t in save_ts:
                     x_hist.append(x.detach().cpu().numpy())
@@ -464,8 +464,8 @@ class PCTauLeapingMPF():
 
                 if t <= corrector_entry_time:
                     for _ in range(num_corrector_steps):
-                        transpose_forward_rates, reverse_rates, _, scores = get_rates(x, t-h)
-                        corrector_rate = transpose_forward_rates * torch.sqrt(scores)
+                        forward_rates, transpose_forward_rates, reverse_rates, _, scores = get_rates(x, t-h)
+                        corrector_rate = (transpose_forward_rates + forward_rates) / 2 * torch.sqrt(scores)
                         corrector_rate[
                             torch.arange(N, device=device).repeat_interleave(D),
                             torch.arange(D, device=device).repeat(N),

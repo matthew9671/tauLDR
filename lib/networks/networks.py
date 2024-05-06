@@ -672,3 +672,4 @@ class ResidualMLP(nn.Module):
         x = x/self.S # (0, 1)
         x = x*2 - 1 # (-1, 1)
         return x
+
