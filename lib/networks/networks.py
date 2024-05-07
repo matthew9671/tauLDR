@@ -423,7 +423,6 @@ class UNet(nn.Module):
 
         return h
 
-
 #Based on https://pytorch.org/tutorials/beginner/transformer_tutorial.html
 class PositionalEncoding(nn.Module):
 
@@ -471,7 +470,6 @@ class TransformerEncoderLayer(nn.Module):
         temb, # ["B", "temb_dim"]
     ):
         B, L, K = x.shape
-
         film_params = self.film_from_temb(temb)
 
         x = self.norm1(x + self._sa_block(x))
