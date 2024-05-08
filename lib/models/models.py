@@ -6,6 +6,7 @@ import torch.nn.functional as F
 import numpy as np
 import lib.models.model_utils as model_utils
 import lib.networks.networks as networks
+from lib.networks.hollow_transformers import HollowTransformerEncoder
 import torch.autograd.profiler as profiler
 import math
 from torch.nn.parallel import DistributedDataParallel as DDP
@@ -186,6 +187,65 @@ class UniformRate():
             print(f"[Warning] UniformRate, large negative transition values {torch.min(transitions)}")
 
         transitions[transitions < 1e-8] = 0.0
+
+        return transitions
+    
+class AbsorbingForwardBase():
+    def __init__(self, cfg, device):
+        self.S = S = cfg.data.S
+        self.device = device
+
+        self.rate_eps = cfg.model.rate_eps
+
+        rate = np.zeros((S, S))
+        rate[:-1, -1] = 1
+        rate -= np.diag(np.sum(rate, axis=1))
+        
+        eigvals, eigvecs = np.linalg.eig(rate)
+        inv_eigvecs = np.linalg.inv(eigvecs)
+
+        self.base_rate = torch.from_numpy(rate).float().to(self.device)
+        self.eigvals = torch.from_numpy(eigvals).float().to(self.device)
+        self.eigvecs = torch.from_numpy(eigvecs).float().to(self.device)
+        self.inv_eigvecs = torch.from_numpy(inv_eigvecs).float().to(self.device)
+
+    def _integral_rate_scalar(self, t):
+        return -torch.log1p(-(1 - self.rate_eps) * t)
+    
+    def _rate_scalar(self, t):
+        return (1 - self.rate_eps) / (1 - (1 - self.rate_eps) * t)
+        
+    def rate(self, t, # ["B"]
+    ):
+        B = t.shape[0]
+        S = self.S
+        rate_scalars = self._rate_scalar(t)
+
+        return self.base_rate.view(1, S, S) * rate_scalars.view(B, 1, 1)
+
+    def transition(self, t, # ["B"]
+    ):
+        B = t.shape[0]
+        S = self.S
+
+        integral_rate_scalars = self._integral_rate_scalar(t)
+
+        adj_eigvals = integral_rate_scalars.view(B, 1) * self.eigvals.view(1, S)
+
+        transitions = self.eigvecs.view(1, S, S) @ \
+            torch.diag_embed(torch.exp(adj_eigvals)) @ \
+            self.inv_eigvecs.view(1, S, S)
+
+        # Some entries that are supposed to be very close to zero might be negative
+        if torch.min(transitions) < -1e-6:
+            print(f"[Warning] Absorbing rate, large negative transition values {torch.min(transitions)}")
+
+        # Clamping at 1e-8 because at float level accuracy anything lower than that
+        # is probably inaccurate and should be zero anyway
+        transitions[transitions < 1e-8] = 0.0
+
+        # # Adding escape probability
+        # transitions[:,-1] += 1e-9 
 
         return transitions
 
@@ -472,11 +532,63 @@ class BirthDeathRateSequenceTransformerEMA(EMA, SequenceTransformer, BirthDeathF
         self.init_ema()
 
 
-
 @model_utils.register_model
 class GaussianRateResidualMLP(ResidualMLP, GaussianTargetRate):
     def __init__(self, cfg, device, rank=None):
         ResidualMLP.__init__(self, cfg, device, rank)
         GaussianTargetRate.__init__(self, cfg, device)
 
+class HollowSequenceTransformer(nn.Module):
+    def __init__(self, cfg, device, rank=None):
+        super().__init__()
 
+        num_layers = cfg.model.num_layers
+        d_model = cfg.model.d_model
+        num_heads = cfg.model.num_heads
+        dim_feedforward = cfg.model.dim_feedforward
+        dropout = cfg.model.dropout
+        num_output_FFresiduals = cfg.model.num_output_FFresiduals
+        time_scale_factor = cfg.model.time_scale_factor
+        temb_dim = cfg.model.temb_dim
+        use_one_hot_input = cfg.model.use_one_hot_input
+        num_layers_per_mixed = cfg.model.num_layers_per_mixed
+
+        self.S = cfg.data.S
+
+        assert len(cfg.data.shape) == 1
+        max_len = cfg.data.shape[0]
+
+        tmp_net = HollowTransformerEncoder(
+            num_layers, d_model, num_heads, dim_feedforward, dropout,
+            num_output_FFresiduals, time_scale_factor, self.S, max_len,
+            temb_dim, use_one_hot_input, num_layers_per_mixed, device
+        ).to(device)
+
+        if cfg.distributed:
+            self.net = DDP(tmp_net, device_ids=[rank])
+        else:
+            self.net = tmp_net
+
+        self.data_shape = cfg.data.shape
+
+    def forward(self,
+        x, # ["B", "D"]
+        times, # ["B"]
+    ):
+        """
+            Returns logits over state space
+        """
+        B, D = x.shape
+        S = self.S
+
+        logits = self.net(x.long(), times.long()) # (B, D, S)
+
+        return logits
+    
+# make sure EMA inherited first so it can override the state dict functions
+@model_utils.register_model
+class AbsorbingHollowSequenceTransformer(HollowSequenceTransformer, AbsorbingForwardBase):
+    def __init__(self, cfg, device, rank=None):
+
+        HollowSequenceTransformer.__init__(self, cfg, device, rank)
+        AbsorbingForwardBase.__init__(self, cfg, device)

@@ -18,8 +18,6 @@ class GenericAux():
         self.one_forward_pass = cfg.loss.one_forward_pass
         self.cross_ent = nn.CrossEntropyLoss()
 
-
-
     def calc_loss(self, minibatch, state, writer):
         model = state['model']
         S = self.cfg.data.S
@@ -55,11 +53,11 @@ class GenericAux():
         rate_vals_square[
             torch.arange(B*D, device=device),
             x_t.long().flatten()
-        ] = 0.0 # 0 the diagonals
+        ] = self.ratio_eps # 0 the diagonals, but add an epsilon to avoid the all-mask edge case
         rate_vals_square = rate_vals_square.view(B, D, S)
         rate_vals_square_dimsum = torch.sum(rate_vals_square, dim=2).view(B, D)
         square_dimcat = torch.distributions.categorical.Categorical(
-            rate_vals_square_dimsum
+            rate_vals_square_dimsum # Maybe we should add a small value to avoid 0?
         )
         square_dims = square_dimcat.sample() # (B,) taking values in [0, D)
         rate_new_val_probs = rate_vals_square[
@@ -67,6 +65,7 @@ class GenericAux():
             square_dims,
             :
         ] # (B, S)
+        rate_new_val_probs
         square_newvalcat = torch.distributions.categorical.Categorical(
             rate_new_val_probs
         )
@@ -120,8 +119,6 @@ class GenericAux():
             (p0t_reg / qt0_denom_reg) * reg_tmp,
             dim=(1,2)
         )
-
-
 
         # ----- second term of continuous ELBO (signal term) ------------
 
@@ -198,7 +195,7 @@ class GenericAux():
 
         Z_sig_norm = base_Z.view(B, 1, 1) - \
             Z_subtraction.view(B, D, 1) + \
-            Z_addition.view(B, 1, S)
+            Z_addition.view(B, 1, S) + self.ratio_eps
 
         rate_sig_norm = rate[
             torch.arange(B, device=device).repeat_interleave(D*S),
@@ -218,8 +215,6 @@ class GenericAux():
             minibatch.long().flatten(),
             x_tilde.long().flatten()
         ].view(B, D) + self.ratio_eps
-
-
 
         sig_norm = torch.sum(
             (rate_sig_norm * qt0_sig_norm_numer * x_tilde_mask) / (Z_sig_norm * qt0_sig_norm_denom.view(B,D,1)),

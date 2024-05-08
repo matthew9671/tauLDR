@@ -1,5 +1,6 @@
 import torch
 from torch.utils.data import Dataset
+from torch.distributions import Categorical
 from . import dataset_utils
 import numpy as np
 import torchvision.datasets
@@ -59,6 +60,32 @@ class LakhPianoroll(Dataset):
         np_data = np.load(cfg.data.path) # (N, L) in range [0, S)
 
         self.data = torch.from_numpy(np_data).to(device)
+
+    def __len__(self):
+        return self.data.shape[0]
+
+    def __getitem__(self, index):
+
+        return self.data[index]
+    
+@dataset_utils.register_dataset
+class Countdown(Dataset):
+    def __init__(self, cfg, device):
+        S = cfg.data.S - 1
+        L = cfg.data.shape[0]
+        N = cfg.data.data_size
+        total_len = N * L
+        data = torch.zeros((total_len,))
+        cat = Categorical(torch.ones((S,))/S)
+        starts = cat.sample((total_len,))
+        curr = 0
+        while curr < total_len:
+            x = starts[curr]
+            l = min(total_len-1, curr+x) - curr
+            data[curr:curr+l] = torch.arange(x, x-l, -1)
+            curr += x + 1
+
+        self.data = data.view(N, L).to(device)
 
     def __len__(self):
         return self.data.shape[0]

@@ -128,6 +128,8 @@ if __name__ == "__main__":
         from config.train.cifar10 import get_config
     elif args.config == 'piano':
         from config.train.piano import get_config
+    elif args.config == 'countdown':
+        from config.train.countdown import get_config
     else:
         raise NotImplementedError
 
