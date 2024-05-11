@@ -22,10 +22,47 @@ def get_initial_samples(N, D, device, S, initial_dist, initial_dist_std=None):
         )
         x = cat.sample((N*D,)).view(N,D)
         x = x.to(device)
+    elif initial_dist == 'absorbing':
+        x = torch.ones((N, D)) * (S-1)
+        x = x.to(device)
     else:
         raise NotImplementedError('Unrecognized initial dist ' + initial_dist)
     return x
 
+def compute_backward(qt0, rate, p0t, in_x, 
+                     denom_x=None, eps=1e-9):
+    S = rate.shape[-1]
+    N, D = in_x.shape
+    device = in_x.device
+    x_0max = torch.max(p0t, dim=2)[1]
+
+    if denom_x is None:
+        # When using the hollow transformer architecture,
+        # the model p0t assumes the current location is mask
+        # regardless of the true token
+        denom_x = in_x
+
+    qt0_denom = qt0[
+        torch.arange(N, device=device).repeat_interleave(D*S),
+        torch.arange(S, device=device).repeat(N*D),
+        denom_x.long().flatten().repeat_interleave(S)
+    ].view(N,D,S) + eps   
+    # First S is x0 second S is x tilde 
+    qt0_numer = qt0 # (N, S, S) 
+    forward_rates = rate[
+        torch.arange(N, device=device).repeat_interleave(D*S),
+        torch.arange(S, device=device).repeat(N*D),
+        in_x.long().flatten().repeat_interleave(S)
+    ].view(N, D, S) 
+    scores = (p0t / qt0_denom) @ qt0_numer
+    reverse_rates = forward_rates * scores # (N, D, S)  
+    transpose_forward_rates = rate[
+        torch.arange(N, device=device).repeat_interleave(D*S),
+        in_x.long().flatten().repeat_interleave(S),
+        torch.arange(S, device=device).repeat(N*D)
+    ].view(N, D, S) 
+
+    return forward_rates, transpose_forward_rates, reverse_rates, x_0max, scores
 
 @sampling_utils.register_sampler
 class TauLeaping():
@@ -34,8 +71,9 @@ class TauLeaping():
 
     def sample(self, model, N, num_intermediates):
         t = 1.0
-        C,H,W = self.cfg.data.shape
-        D = C*H*W
+        # C,H,W = self.cfg.data.shape
+        # D = C*H*W
+        D = np.prod(self.cfg.data.shape)
         S = self.cfg.data.S
         scfg = self.cfg.sampler
         num_steps = scfg.num_steps
@@ -127,8 +165,9 @@ class PCTauLeapingBirthDeath():
     def sample(self, model, N, num_intermediates):
         t = 1.0
 
-        C,H,W = self.cfg.data.shape
-        D = C*H*W
+        # C,H,W = self.cfg.data.shape
+        # D = C*H*W
+        D = np.prod(self.cfg.data.shape)
         S = self.cfg.data.S
         scfg = self.cfg.sampler
         num_steps = scfg.num_steps
@@ -247,8 +286,9 @@ class PCTauLeapingBarker():
     def sample(self, model, N, num_intermediates):
         t = 1.0
 
-        C,H,W = self.cfg.data.shape
-        D = C*H*W
+        # C,H,W = self.cfg.data.shape
+        # D = C*H*W
+        D = np.prod(self.cfg.data.shape)
         S = self.cfg.data.S
         scfg = self.cfg.sampler
         num_steps = scfg.num_steps
@@ -368,8 +408,9 @@ class PCTauLeapingMPF():
     def sample(self, model, N, num_intermediates):
         t = 1.0
 
-        C,H,W = self.cfg.data.shape
-        D = C*H*W
+        # C,H,W = self.cfg.data.shape
+        # D = C*H*W
+        D = np.prod(self.cfg.data.shape)
         S = self.cfg.data.S
         scfg = self.cfg.sampler
         num_steps = scfg.num_steps
@@ -480,6 +521,157 @@ class PCTauLeapingMPF():
             p_0gt = F.softmax(model(x, min_t * torch.ones((N,), device=device)), dim=2) # (N, D, S)
             x_0max = torch.max(p_0gt, dim=2)[1]
             return x_0max.detach().cpu().numpy().astype(int), x_hist, x0_hist
+
+class PCTauLeapingAbsorbingInformed():
+    def __init__(self, cfg):
+        self.cfg = cfg
+
+    def sample(self, model, N, num_intermediates):
+        t = 1.0
+
+        D = np.prod(self.cfg.data.shape)
+        S = self.cfg.data.S
+        scfg = self.cfg.sampler
+        num_steps = scfg.num_steps
+        min_t = scfg.min_t
+        eps_ratio = scfg.eps_ratio
+        num_corrector_steps = scfg.num_corrector_steps
+        corrector_step_size_multiplier = scfg.corrector_step_size_multiplier
+        corrector_entry_time = scfg.corrector_entry_time
+        
+        if scfg.balancing_function == "barker":
+            balancing_function = lambda score: score / (1 + score) 
+        elif scfg.balancing_function == "mpf":
+            balancing_function = lambda score: torch.sqrt(score)
+        elif scfg.balancing_function == "birthdeath":
+            balancing_function = None
+        else:
+            print("Balancing function not found: " + scfg.balancing_function)
+            return
+        
+        device = model.device
+
+        initial_dist = scfg.initial_dist
+        if initial_dist == 'gaussian':
+            initial_dist_std = model.Q_sigma
+        else:
+            initial_dist_std = None
+
+        with torch.no_grad():
+            x = get_initial_samples(N, D, device, S, initial_dist,
+                initial_dist_std)
+
+            h = 1.0 / num_steps # approximately 
+            ts = np.linspace(1.0, min_t+h, num_steps)
+            save_ts = ts[np.linspace(0, len(ts)-2, num_intermediates, dtype=int)]
+
+            x_hist = []
+            x0_hist = []
+            c_rate_hist = []
+
+            for idx, t in tqdm(enumerate(ts[0:-1])):
+
+                h = ts[idx] - ts[idx+1]
+
+                def get_rates(in_x, in_t):
+                    qt0 = model.transition(in_t * torch.ones((N,), device=device)) # (N, S, S)
+                    rate = model.rate(in_t * torch.ones((N,), device=device)) # (N, S, S)
+
+                    p0t = F.softmax(model(in_x, in_t * torch.ones((N,), device=device)), dim=2) # (N, D, S)
+
+                    denom_x = torch.ones_like(in_x) * (S-1)
+
+                    forward_rates, transpose_forward_rates, reverse_rates, x_0max, scores = compute_backward(qt0, rate, p0t, in_x, denom_x=denom_x, eps=eps_ratio)
+                    
+                    mask_positions = in_x == (S-1)
+                    nonmask_positions = ~mask_positions
+
+                    backward_score_to_curr = scores[
+                        torch.arange(N, device=device).repeat_interleave(D),
+                        torch.arange(D, device=device).repeat(N),
+                        in_x.long().flatten()
+                    ].view(N,D)
+                    forward_score_from_curr = 1 / (backward_score_to_curr * nonmask_positions + mask_positions)
+                    forward_score_from_curr *= nonmask_positions
+
+                    scores = scores * mask_positions.unsqueeze(2)
+                    scores[:,:,S-1] = forward_score_from_curr
+                    
+                    forward_rates[
+                        torch.arange(N, device=device).repeat_interleave(D),
+                        torch.arange(D, device=device).repeat(N),
+                        in_x.long().flatten()
+                    ] = 0.0 
+                    reverse_rates[
+                        torch.arange(N, device=device).repeat_interleave(D),
+                        torch.arange(D, device=device).repeat(N),
+                        in_x.long().flatten()
+                    ] = 0.0 
+                    
+                    return forward_rates, transpose_forward_rates, reverse_rates, x_0max, scores
+                    
+                def take_poisson_step(in_x, in_reverse_rates, in_h):
+                    diffs = torch.arange(S, device=device).view(1,1,S) - in_x.view(N,D,1)
+                    poisson_dist = torch.distributions.poisson.Poisson(in_reverse_rates * in_h)
+                    jump_nums = poisson_dist.sample()
+                    adj_diffs = jump_nums * diffs
+                    overall_jump = torch.sum(adj_diffs, dim=2)
+                    unclip_x_new = in_x + overall_jump
+                    x_new = torch.clamp(unclip_x_new, min=0, max=S-1)
+
+                    return x_new
+
+                _, _, reverse_rates, x_0max, _ = get_rates(x, t)
+
+                if t in save_ts:
+                    x_hist.append(x.detach().cpu().numpy())
+                    x0_hist.append(x_0max.detach().cpu().numpy())
+
+                x = take_poisson_step(x, reverse_rates, h)
+
+                if t <= corrector_entry_time:
+                    for cstep in range(num_corrector_steps):
+                        forward_rates, transpose_forward_rates, reverse_rates, _, scores = get_rates(x, t-h)
+                        if balancing_function is None:
+                            # We're using the default corrector
+                            # which corresponds to birth-death Stein operator
+                            corrector_rate = transpose_forward_rates + reverse_rates
+                        else:
+                            # We removed the one half here because it makes more sense for the absorbing
+                            corrector_rate = (transpose_forward_rates + forward_rates) * balancing_function(scores)
+                            
+                        corrector_rate[
+                            torch.arange(N, device=device).repeat_interleave(D),
+                            torch.arange(D, device=device).repeat(N),
+                            x.long().flatten()
+                        ] = 0.0
+
+                        if cstep == 0 and t in save_ts:
+                            c_rate_hist.append(corrector_rate.detach().cpu().numpy())
+
+                        x = take_poisson_step(x, corrector_rate, 
+                            corrector_step_size_multiplier * h)
+                elif t in save_ts:
+                    c_rate_hist.append(np.zeros((N, D, S)))
+
+            x_hist = np.array(x_hist).astype(int)
+            x0_hist = np.array(x0_hist).astype(int)
+            c_rate_hist = np.array(c_rate_hist)
+
+            p_0gt = F.softmax(model(x, min_t * torch.ones((N,), device=device)), dim=2) # (N, D, S)
+            x_0max = torch.max(p_0gt, dim=2)[1]
+
+            mask_positions = x == (S-1)
+            nonmask_positions = ~mask_positions
+            samples = nonmask_positions * x + mask_positions * x_0max
+            
+            hist = {
+                "x": x_hist,
+                "x0": x0_hist,
+                "rc": c_rate_hist
+            }
+            
+            return samples.detach().cpu().numpy().astype(int), hist
 
 @sampling_utils.register_sampler
 class ConditionalTauLeaping():

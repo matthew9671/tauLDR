@@ -4,7 +4,7 @@ def get_config():
     save_directory = '/home/groups/swl1/yixiuz/torch_fid/experiments/countdown'
 
     config = ml_collections.ConfigDict()
-    config.experiment_name = 'countdown_test'
+    config.experiment_name = 'countdown_one_hot'
     config.save_location = save_directory
 
     config.device = 'cuda'
@@ -20,7 +20,7 @@ def get_config():
 
     config.training = training = ml_collections.ConfigDict()
     training.train_step_name = 'Standard'
-    training.n_iters = 100000
+    training.n_iters = 100000 # 20-50K should be enough for this
     training.clip_grad = True
     training.warmup = 5000
 
@@ -44,7 +44,7 @@ def get_config():
     model.num_output_FFresiduals = 2
     model.num_layers_per_mixed = 3
     model.time_scale_factor = 1000
-    model.use_one_hot_input = False
+    model.use_one_hot_input = True
 
     # model.ema_decay = 0.9999
 
@@ -57,7 +57,7 @@ def get_config():
 
     config.optimizer = optimizer = ml_collections.ConfigDict()
     optimizer.name = 'Adam'
-    optimizer.lr = 1e-4
+    optimizer.lr = 2e-4
 
     config.saving = saving = ml_collections.ConfigDict()
 
