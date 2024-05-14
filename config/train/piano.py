@@ -6,7 +6,7 @@ def get_config():
 
 
     config = ml_collections.ConfigDict()
-    config.experiment_name = 'piano_test'
+    config.experiment_name = 'piano_absorbing_baseline'
     config.save_location = save_directory
 
     config.device = 'cuda'
@@ -30,13 +30,13 @@ def get_config():
     config.data = data = ml_collections.ConfigDict()
     data.name = 'LakhPianoroll'
     data.path = pianoroll_dataset_path + '/train.npy'
-    data.S = 129
+    data.S = 129 + 1
     data.batch_size = 64
     data.shuffle = True
     data.shape = [256]
 
     config.model = model = ml_collections.ConfigDict()
-    model.name = 'UniformRateSequenceTransformerEMA'
+    model.name = 'AbsorbingSequenceTransformerEMA'
 
     model.num_layers = 6
     model.d_model = 128
@@ -50,15 +50,16 @@ def get_config():
 
     model.ema_decay = 0.9999
 
-    model.rate_const = 0.03
+    model.rate_eps = 1e-3 # Instead of rate_const we have rate_eps
+    # model.rate_const = 0.03
 
-    model.rate_sigma = 3.0
-    model.Q_sigma = 20.0
-    model.time_exponential = 1000.0
-    model.time_base = 0.5
+    # model.rate_sigma = 3.0
+    # model.Q_sigma = 20.0
+    # model.time_exponential = 1000.0
+    # model.time_base = 0.5
 
-    model.sigma_min = 1.0
-    model.sigma_max = 100.0
+    # model.sigma_min = 1.0
+    # model.sigma_max = 100.0
 
 
     config.optimizer = optimizer = ml_collections.ConfigDict()

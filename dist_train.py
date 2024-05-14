@@ -190,11 +190,17 @@ if __name__ == "__main__":
     args, unknown_args = parser.parse_known_args()
     if args.config == 'cifar10':
         from config.train.cifar10_distributed import get_config
+    # elif args.config == 'piano':
+    #     from config.train.piano import get_config
     else:
         raise NotImplementedError
 
 
     cfg = get_config()
+    # Hard coding to test how much speedup is obtained
+    # cfg.distributed = True
+    # cfg.num_gpus = 2
+
     world_size = cfg.num_gpus
     mp.spawn(main,
         args=(world_size, cfg, 0),

@@ -6,7 +6,7 @@ def get_config():
 
 
     config = ml_collections.ConfigDict()
-    config.experiment_name = 'piano_test'
+    config.experiment_name = 'piano_absorbing_hollow'
     config.save_location = save_directory
 
     config.device = 'cuda'
@@ -36,7 +36,7 @@ def get_config():
     data.shape = [256]
 
     config.model = model = ml_collections.ConfigDict()
-    model.name = 'AbsorbingHollowSequenceTransformer'
+    model.name = 'AbsorbingHollowSequenceTransformerFlash'
 
     model.num_layers = 6
     model.d_model = 128
@@ -48,6 +48,8 @@ def get_config():
     model.num_layers_per_mixed = 3
     model.time_scale_factor = 1000
     model.use_one_hot_input = True
+
+    model.ema_decay = 0.9999
 
     model.rate_eps = 1e-3 # Instead of rate_const we have rate_eps
 

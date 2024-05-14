@@ -538,7 +538,7 @@ class GaussianRateResidualMLP(ResidualMLP, GaussianTargetRate):
         ResidualMLP.__init__(self, cfg, device, rank)
         GaussianTargetRate.__init__(self, cfg, device)
 
-class HollowSequenceTransformer(nn.Module):
+class HollowSequenceTransformerFlash(nn.Module):
     def __init__(self, cfg, device, rank=None):
         super().__init__()
 
@@ -585,10 +585,75 @@ class HollowSequenceTransformer(nn.Module):
 
         return logits
     
-# make sure EMA inherited first so it can override the state dict functions
+class HollowSequenceTransformer(nn.Module):
+    def __init__(self, cfg, device, rank=None):
+        super().__init__()
+
+        num_layers = cfg.model.num_layers
+        d_model = cfg.model.d_model
+        num_heads = cfg.model.num_heads
+        dim_feedforward = cfg.model.dim_feedforward
+        dropout = cfg.model.dropout
+        num_output_FFresiduals = cfg.model.num_output_FFresiduals
+        time_scale_factor = cfg.model.time_scale_factor
+        temb_dim = cfg.model.temb_dim
+        use_one_hot_input = cfg.model.use_one_hot_input
+        num_layers_per_mixed = cfg.model.num_layers_per_mixed
+
+        self.S = cfg.data.S
+
+        assert len(cfg.data.shape) == 1
+        max_len = cfg.data.shape[0]
+
+        tmp_net = HollowTransformerEncoder(
+            num_layers, d_model, num_heads, dim_feedforward, dropout,
+            num_output_FFresiduals, time_scale_factor, self.S, max_len,
+            temb_dim, use_one_hot_input, num_layers_per_mixed, device
+        ).to(device)
+
+        if cfg.distributed:
+            self.net = DDP(tmp_net, device_ids=[rank])
+        else:
+            self.net = tmp_net
+
+        self.data_shape = cfg.data.shape
+
+    def forward(self,
+        x, # ["B", "D"]
+        times, # ["B"]
+    ):
+        """
+            Returns logits over state space
+        """
+        B, D = x.shape
+        S = self.S
+
+        logits = self.net(x.long(), times.long()) # (B, D, S)
+
+        return logits
+    
 @model_utils.register_model
 class AbsorbingHollowSequenceTransformer(HollowSequenceTransformer, AbsorbingForwardBase):
     def __init__(self, cfg, device, rank=None):
 
         HollowSequenceTransformer.__init__(self, cfg, device, rank)
         AbsorbingForwardBase.__init__(self, cfg, device)
+
+@model_utils.register_model
+class AbsorbingHollowSequenceTransformerFlash(EMA, HollowSequenceTransformer, AbsorbingForwardBase):
+    def __init__(self, cfg, device, rank=None):
+        EMA.__init__(self, cfg)
+        HollowSequenceTransformerFlash.__init__(self, cfg, device, rank)
+        AbsorbingForwardBase.__init__(self, cfg, device)
+
+        self.init_ema()
+
+# make sure EMA inherited first so it can override the state dict functions
+@model_utils.register_model
+class AbsorbingSequenceTransformerEMA(EMA, SequenceTransformer, AbsorbingForwardBase):
+    def __init__(self, cfg, device, rank=None):
+        EMA.__init__(self, cfg)
+        SequenceTransformer.__init__(self, cfg, device, rank)
+        AbsorbingForwardBase.__init__(self, cfg, device)
+
+        self.init_ema()
