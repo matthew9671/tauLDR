@@ -136,8 +136,10 @@ class DoubleTransformerEncoderLayer(nn.Module):
         xv = torch.cat([xv1.view(B, L, H, D), 
                         xv2.view(B, L, H, D)], axis=2)
         xv = torch.swapaxes(xv, 1, 2)
-        # Input shape (B, 2*H, L, D)
-        x = F.scaled_dot_product_attention(xq, xk, xv, dropout_p=self.dropout_p, is_causal=True)
+
+        with torch.backends.cuda.sdp_kernel(enable_flash=True, enable_math=False, enable_mem_efficient=False):
+            # Input shape (B, 2*H, L, D)
+            x = F.scaled_dot_product_attention(xq, xk, xv, dropout_p=self.dropout_p, is_causal=True)
         # Split into two streams again with shape (B, H, L, D)
         x1, x2 = x[:, :H], x[:, H:]
         x1 = torch.swapaxes(x1, 1, 2).view(B, L, K)

@@ -6,7 +6,7 @@ import torch.nn.functional as F
 import numpy as np
 import lib.models.model_utils as model_utils
 import lib.networks.networks as networks
-from lib.networks.hollow_transformers import HollowTransformerEncoder
+from lib.networks.hollow_transformers import HollowTransformerEncoder, HollowTransformerEncoderAlt
 import torch.autograd.profiler as profiler
 import math
 from torch.nn.parallel import DistributedDataParallel as DDP
@@ -558,7 +558,7 @@ class HollowSequenceTransformer(nn.Module):
         assert len(cfg.data.shape) == 1
         max_len = cfg.data.shape[0]
 
-        tmp_net = HollowTransformerEncoder(
+        tmp_net = HollowTransformerEncoderAlt(
             num_layers, d_model, num_heads, dim_feedforward, dropout,
             num_output_FFresiduals, time_scale_factor, self.S, max_len,
             temb_dim, use_one_hot_input, num_layers_per_mixed, device

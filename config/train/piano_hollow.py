@@ -39,9 +39,9 @@ def get_config():
     model.name = 'AbsorbingHollowSequenceTransformer'
 
     model.num_layers = 6
-    model.d_model = 64
+    model.d_model = 128
     model.num_heads = 8
-    model.dim_feedforward = 2048
+    model.dim_feedforward = 1024
     model.dropout = 0.1
     model.temb_dim = 128
     model.num_output_FFresiduals = 2
