@@ -10,8 +10,8 @@ def get_config():
     config.save_location = save_directory
 
     config.device = 'cuda'
-    config.distributed = False
-    config.num_gpus = 1
+    config.distributed = False #True
+    config.num_gpus = 1#2
 
     config.loss = loss = ml_collections.ConfigDict()
     loss.name = 'ConditionalAux'

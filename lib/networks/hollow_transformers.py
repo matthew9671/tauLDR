@@ -69,6 +69,80 @@ class DirectionalTransformerEncoderLayer(nn.Module):
         x = self.linear2(self.dropout(self.activation(self.linear1(x))))
         return self.dropout2(x)
     
+class MixingTransformerEncoderLayer(nn.Module):
+    def __init__(self, d_model, num_heads, dim_feedforward, dropout, temb_dim, 
+                 kdim=None, vdim=None):
+        super().__init__()
+        self.dropout_p = dropout
+
+        self.linear1 = nn.Linear(d_model, dim_feedforward)
+        self.dropout = nn.Dropout(dropout)
+        self.linear2 = nn.Linear(dim_feedforward, d_model)
+
+        self.norm1 = nn.LayerNorm(d_model, eps=1e-5)
+        self.norm2 = nn.LayerNorm(d_model, eps=1e-5)
+        self.dropout1 = nn.Dropout(dropout)
+        self.dropout2 = nn.Dropout(dropout)
+
+        self.activation = nn.ReLU()
+
+        self.film_from_temb = nn.Linear(temb_dim, 2*d_model)
+
+        self.wq = nn.Linear(d_model, d_model, bias=False)
+        self.wk = nn.Linear(kdim, d_model, bias=False)
+        self.wv = nn.Linear(vdim, d_model, bias=False)
+        self.wo = nn.Linear(d_model, d_model, bias=False)
+
+        self.n_heads = num_heads
+
+    def forward(self,
+        query, # ["B", "L", "K"],
+        key_value,
+        temb, # ["B", "temb_dim"]
+    ):
+        q, kv = query, key_value
+        B, L, K = q.shape
+        film_params = self.film_from_temb(temb)
+
+        x = self.norm1(q + self._sa_block(q, kv))
+        x = film_params[:, None, 0:K] * x + film_params[:, None, K:]
+        x = self.norm2(x + self._ff_block(x))
+        x = film_params[:, None, 0:K] * x + film_params[:, None, K:]
+
+        return x
+
+    def _sa_block(self, x1, x2):
+        B, L, K = x1.shape
+        H = self.n_heads
+        D = K // H # The head dimension
+        device = x1.device
+
+        xq, xk, xv = self.wq(x1), self.wk(x2), self.wv(x2)
+
+        # Reshape and concat everything along the head dimension
+        xq = xq.view(B, L, H, D).to(torch.bfloat16)
+        xq = torch.swapaxes(xq, 1, 2)
+        xk = xk.view(B, 2*L, H, D).to(torch.bfloat16)
+        xk = torch.swapaxes(xk, 1, 2)
+        xv = xv.view(B, 2*L, H, D).to(torch.bfloat16)
+        xv = torch.swapaxes(xv, 1, 2)
+
+        forward_mask = torch.triu(torch.ones(L, L) * float('-inf'), diagonal=1).to(device)
+        backward_mask = torch.tril(torch.ones(L, L) * float('-inf'), diagonal=-1).to(device)
+        mask = torch.cat([forward_mask, backward_mask], dim=1).to(torch.bfloat16)
+        # with torch.backends.cuda.sdp_kernel(enable_flash=True, enable_math=False, enable_mem_efficient=False):
+        # Input shape (B, 2*H, L, D)
+        x = F.scaled_dot_product_attention(xq, xk, xv, dropout_p=self.dropout_p,
+                                           attn_mask=mask)
+
+        x = torch.swapaxes(x, 1, 2).view(B, L, K).to(torch.float32)
+        x = self.wo(x)
+        return self.dropout1(x)
+
+    def _ff_block(self, x):
+        x = self.linear2(self.dropout(self.activation(self.linear1(x))))
+        return self.dropout2(x)
+
 class DoubleTransformerEncoderLayer(nn.Module):
     def __init__(self, d_model, num_heads, dim_feedforward, dropout, temb_dim, 
                  kdim=None, vdim=None, direction='forward'):
@@ -107,6 +181,7 @@ class DoubleTransformerEncoderLayer(nn.Module):
         x1_attn, x2_attn = self._sa_block(x1, x2)
         x1 = self.norm1(x1 + x1_attn)
         x1 = film_params[:, None, 0:K] * x1 + film_params[:, None, K:]
+
         x2 = self.norm1(x2 + x2_attn)
         x2 = film_params[:, None, 0:K] * x2 + film_params[:, None, K:]
 
@@ -129,17 +204,20 @@ class DoubleTransformerEncoderLayer(nn.Module):
         # Reshape and concat everything along the head dimension
         xq = torch.cat([xq1.view(B, L, H, D), 
                         xq2.view(B, L, H, D)], axis=2)
-        xq = torch.swapaxes(xq, 1, 2)
+        xq = torch.swapaxes(xq, 1, 2).to(torch.bfloat16)
         xk = torch.cat([xk1.view(B, L, H, D), 
                         xk2.view(B, L, H, D)], axis=2)
-        xk = torch.swapaxes(xk, 1, 2)
+        xk = torch.swapaxes(xk, 1, 2).to(torch.bfloat16)
         xv = torch.cat([xv1.view(B, L, H, D), 
                         xv2.view(B, L, H, D)], axis=2)
-        xv = torch.swapaxes(xv, 1, 2)
+        xv = torch.swapaxes(xv, 1, 2).to(torch.bfloat16)
 
         with torch.backends.cuda.sdp_kernel(enable_flash=True, enable_math=False, enable_mem_efficient=False):
             # Input shape (B, 2*H, L, D)
-            x = F.scaled_dot_product_attention(xq, xk, xv, dropout_p=self.dropout_p, is_causal=True)
+            x = F.scaled_dot_product_attention(xq, xk, xv, dropout_p=self.dropout_p, 
+                                               is_causal=True
+                                               )
+        x = x.to(torch.float32)
         # Split into two streams again with shape (B, H, L, D)
         x1, x2 = x[:, :H], x[:, H:]
         x1 = torch.swapaxes(x1, 1, 2).view(B, L, K)
@@ -177,8 +255,8 @@ class HollowTransformerEncoderAlt(nn.Module):
             )
             if (i + 1) % num_layers_per_mixed == 0:
                 self.mixer_encoder_layers.append(
-                    DirectionalTransformerEncoderLayer(d_model * 2, num_heads, dim_feedforward,
-                        dropout, 4*temb_dim, kdim=d_model, vdim=d_model, direction='mixed')
+                    MixingTransformerEncoderLayer(d_model * 2, num_heads, dim_feedforward,
+                        dropout, 4*temb_dim, kdim=d_model, vdim=d_model)
                 )
         # self.forward_encoder_layers = nn.ModuleList(self.forward_encoder_layers)
         # self.backward_encoder_layers = nn.ModuleList(self.backward_encoder_layers)
@@ -229,20 +307,19 @@ class HollowTransformerEncoderAlt(nn.Module):
         x = self.pos_embed(x)
 
         zero_pad = torch.zeros(x.size(0), 1, x.size(2)).to(x.device)
-        x = torch.cat([zero_pad, x[:,:-1]], dim=1)
-        x_rev = torch.flip(torch.cat([x[:,1:], zero_pad], dim=1), [1])
+        xf = torch.cat([zero_pad, x[:,:-1]], dim=1)
+        xb = torch.cat([x[:,1:], zero_pad], dim=1)
+        xb = torch.flip(xb, [1])
         mixed_x = None
 
         # for encoder_layer in self.encoder_layers:
         for i in range(len(self.double_encoder_layers)):
-            # forward_x = self.forward_encoder_layers[i](forward_x, forward_x, temb)
-            # backward_x = self.backward_encoder_layers[i](backward_x, backward_x, temb)
-            x, x_rev = self.double_encoder_layers[i](x, x_rev, temb)
+            xf, xb = self.double_encoder_layers[i](xf, xb, temb)
             if (i+1) % self.num_layers_per_mixed == 0:
-                xf, xb = x, torch.flip(x_rev, [1])
-                concat_output = torch.cat([xf, xb], dim=1)
+                xb_flipped = torch.flip(xb, [1])
+                concat_output = torch.cat([xf, xb_flipped], dim=1)
                 if mixed_x is None:
-                    mixed_x = torch.cat([xf, xb], dim=2)
+                    mixed_x = torch.cat([xf, xb_flipped], dim=2)
                 mixed_x = self.mixer_encoder_layers[i // self.num_layers_per_mixed](mixed_x, concat_output, temb)
         x = mixed_x
 
