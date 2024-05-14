@@ -522,6 +522,7 @@ class PCTauLeapingMPF():
             x_0max = torch.max(p_0gt, dim=2)[1]
             return x_0max.detach().cpu().numpy().astype(int), x_hist, x0_hist
 
+@sampling_utils.register_sampler
 class PCTauLeapingAbsorbingInformed():
     def __init__(self, cfg):
         self.cfg = cfg

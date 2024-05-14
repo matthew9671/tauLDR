@@ -52,8 +52,7 @@ eval_cfg.sampler.corrector_entry_time = args.entry_time
 eval_cfg.sampler.corrector_step_size_multiplier = args.corrector_step_size
 eval_cfg.sampler.balancing_function = args.sampler
 
-# We're assuming the absorbing forward process, so the true state size is data.S-1
-S = train_cfg.data.S - 1
+S = train_cfg.data.S 
 device = torch.device("cuda")
 
 model = model_utils.create_model(train_cfg, device)
@@ -109,5 +108,5 @@ for _ in range(num_repeats):
     error_rate = count_mistakes(all_samples)
     h_dist = hellinger(data_flat, all_samples.flatten(), S)
             
-    print("Hellinger distance", h_dists)
+    print("Hellinger distance", h_dist)
     print("Error rate", error_rate)

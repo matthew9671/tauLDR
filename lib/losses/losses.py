@@ -294,7 +294,7 @@ class ConditionalAux():
         rate_vals_square[
             torch.arange(B*d, device=device),
             x_t.long().flatten()
-        ] = 0.0 # 0 the diagonals
+        ] = self.ratio_eps # 0 the diagonals, but add an epsilon to avoid the all-mask edge case
         rate_vals_square = rate_vals_square.view(B, d, S)
         rate_vals_square_dimsum = torch.sum(rate_vals_square, dim=2).view(B, d)
         square_dimcat = torch.distributions.categorical.Categorical(
@@ -444,7 +444,7 @@ class ConditionalAux():
 
         Z_sig_norm = base_Z.view(B, 1, 1) - \
             Z_subtraction.view(B, d, 1) + \
-            Z_addition.view(B, 1, S)
+            Z_addition.view(B, 1, S) + self.ratio_eps
 
         rate_sig_norm = rate[
             torch.arange(B, device=device).repeat_interleave(d*S),
@@ -477,6 +477,9 @@ class ConditionalAux():
 
         writer.add_scalar('sig', sig_mean.detach(), state['n_iter'])
         writer.add_scalar('reg', reg_mean.detach(), state['n_iter'])
+
+        assert(not sig_mean.isnan().any())
+        assert(not reg_mean.isnan().any())
 
         neg_elbo = sig_mean + reg_mean
 
