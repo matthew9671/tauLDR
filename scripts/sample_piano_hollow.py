@@ -23,10 +23,11 @@ import lib.sampling.sampling_utils as sampling_utils
 parser = argparse.ArgumentParser()
 
 # Add arguments
-parser.add_argument('--sampler', type=str, default="BirthDeath", help='')
+parser.add_argument('--sampler', type=str, default="birthdeath", help='')
+parser.add_argument('--num-steps', type=int, default=500, help='')
 parser.add_argument('--corrector-steps', type=int, default=2, help='')
 parser.add_argument('--entry-time', type=float, default=0.9, help='')
-parser.add_argument('--corrector-step-size', type=float, default=.1, help='')
+parser.add_argument('--corrector-step-size', type=float, default=.5, help='')
 
 # Parse the arguments
 args = parser.parse_args()
@@ -43,10 +44,12 @@ print("Corrector entry time: {}".format(args.entry_time))
 print("Corrector step size multiplier: {}".format(args.corrector_step_size))
 
 # Override default configs
-eval_cfg.sampler.name = 'ConditionalPCTauLeaping' + args.sampler
+eval_cfg.sampler.name = 'ConditionalPCTauLeapingAbsorbingInformed'
+eval_cfg.sampler.num_steps = args.num_steps
 eval_cfg.sampler.num_corrector_steps = args.corrector_steps
 eval_cfg.sampler.corrector_entry_time = args.entry_time
 eval_cfg.sampler.corrector_step_size_multiplier = args.corrector_step_size
+eval_cfg.sampler.balancing_function = args.sampler
 
 S = train_cfg.data.S
 device = torch.device("cuda")
@@ -66,6 +69,8 @@ data = dataset.data
 test_dataset = np.load(eval_cfg.sampler.test_dataset)
 condition_dim = eval_cfg.sampler.condition_dim
 descramble_key = np.loadtxt(eval_cfg.pianoroll_dataset_path + '/descramble_key.txt')
+# The mask stays the same
+descramble_key = np.concatenate([descramble_key, np.array([descramble_key.shape[0]])], axis=0)
 
 def descramble(samples):
     return descramble_key[samples.flatten()].reshape(*samples.shape)
@@ -104,6 +109,9 @@ sampler = sampling_utils.get_sampler(eval_cfg)
 test_size = test_dataset.shape[0]
 
 
+all_h_dists = []
+all_outlier_proportions = []
+
 for _ in range(num_repeats):
     h_dists = []
     outlier_proportions = []
@@ -124,3 +132,11 @@ for _ in range(num_repeats):
             
     print("Hellinger distance", np.mean(h_dists))
     print("Proportion of outliers", np.mean(outlier_proportions))
+    all_h_dists.append(np.mean(h_dists))
+    all_outlier_proportions.append(np.mean(outlier_proportions))
+
+print("------------------------------")
+print("Result summary over {} runs:".format(num_repeats))
+print("Hellinger distance: {}pm{}".format(np.mean(all_h_dists), np.std(all_h_dists)))
+print("Proportion of outliers: {}pm{}".format(np.mean(all_outlier_proportions), 
+                                              np.std(all_outlier_proportions)))
