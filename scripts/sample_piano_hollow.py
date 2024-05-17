@@ -121,9 +121,8 @@ for _ in range(num_repeats):
         size = end - start
         
         conditioner = torch.from_numpy(test_dataset[start:end, :condition_dim]).to(device)
-        samples, x_hist, x0_hist = sampler.sample(model, size, 1, conditioner)
-        samples, x_hist, x0_hist = descramble(samples), descramble(x_hist), descramble(x0_hist)
-
+        samples, _ = sampler.sample(model, size, 1, conditioner)
+        samples = descramble(samples)
         for i in range(size):
             h = hellinger(descrambled_test_dataset[start+i, :], samples[i, :])
             r = outliers(descrambled_test_dataset[start+i, :], samples[i, :])
