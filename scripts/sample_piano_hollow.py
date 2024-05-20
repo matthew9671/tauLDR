@@ -5,7 +5,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 sys.path.append(os.getcwd())
-from config.eval.piano import get_config as get_eval_config
+# !!!
+from config.eval.piano_hollow import get_config as get_eval_config
 import lib.utils.bookkeeping as bookkeeping
 from pathlib import Path
 import numpy as np
@@ -38,6 +39,7 @@ train_cfg = bookkeeping.load_ml_collections(Path(eval_cfg.train_config_path))
 for item in eval_cfg.train_config_overrides:
     utils.set_in_nested_dict(train_cfg, item[0], item[1])
 
+print("Using model from " + eval_cfg.checkpoint_path)
 print("Sampler: {}".format(args.sampler))
 print("Number of corrector steps: {}".format(args.corrector_steps))
 print("Corrector entry time: {}".format(args.entry_time))
@@ -103,7 +105,7 @@ def outliers(ref, sample):
     return np.sum((1 - ref_mask) * sample_dist)
 
 batch_size = 100
-num_repeats = 1
+num_repeats = 5
 
 sampler = sampling_utils.get_sampler(eval_cfg)
 test_size = test_dataset.shape[0]

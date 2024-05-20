@@ -3,8 +3,14 @@ import ml_collections
 def get_config():
 
     pianoroll_dataset_path = '/home/groups/swl1/yixiuz/torch_fid/downloads/pianoroll_dataset'
+    # model_location = '/home/groups/swl1/yixiuz/torch_fid/experiments/piano/2024-05-14/00-30-46_piano_absorbing_baseline/checkpoints/ckpt_0000999999.pt'
+    # model_config_location = '/home/groups/swl1/yixiuz/torch_fid/experiments/piano/2024-05-14/00-30-46_piano_absorbing_baseline/config/config_001.yaml'
     model_location = '/home/groups/swl1/yixiuz/torch_fid/experiments/piano/2024-05-14/00-36-56_piano_absorbing_hollow/checkpoints/ckpt_0000999999.pt'
     model_config_location = '/home/groups/swl1/yixiuz/torch_fid/experiments/piano/2024-05-14/00-36-56_piano_absorbing_hollow/config/config_001.yaml'
+    # model_location = '/home/groups/swl1/yixiuz/torch_fid/experiments/piano/2024-05-17/01-09-32_piano_absorbing_hollow/checkpoints/ckpt_0000999999.pt'
+    # model_config_location = '/home/groups/swl1/yixiuz/torch_fid/experiments/piano/2024-05-17/01-09-32_piano_absorbing_hollow/config/config_001.yaml'
+
+    
 
     config = ml_collections.ConfigDict()
     config.eval_name = 'piano'
@@ -29,7 +35,7 @@ def get_config():
 
 
     config.sampler = sampler = ml_collections.ConfigDict()
-    sampler.name = 'ConditionalPCTauLeapingAbsorbingInformed' # ConditionalTauLeaping or ConditionalPCTauLeaping
+    sampler.name = 'ConditionalPCTauLeapingAbsorbingInformed' # ConditionalTauLeaping or ConditionalPCTauLeaping or ConditionalPCTauLeapingAbsorbingInformed
     sampler.balancing_function = "mpf"
     sampler.num_steps = 1000
     sampler.min_t = 0.01

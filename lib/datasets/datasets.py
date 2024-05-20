@@ -7,6 +7,7 @@ import torchvision.datasets
 import torchvision.transforms
 import os
 
+import pandas as pd
 
 @dataset_utils.register_dataset
 class DiscreteCIFAR10(torchvision.datasets.CIFAR10):
@@ -93,3 +94,72 @@ class Countdown(Dataset):
     def __getitem__(self, index):
 
         return self.data[index]
+    
+@dataset_utils.register_dataset
+class DiscreteGenes(Dataset):
+    def __init__(self, cfg, device):
+
+        if cfg.data.use_absorbing:
+            S = cfg.data.S - 1
+        else:
+            S = cfg.data.S
+
+        full_data = torch.load(cfg.data.path).double()
+        centered_loggen = full_data.log10() - full_data.log10().mean(1).unsqueeze(-1)
+        expr_genes = centered_loggen[(centered_loggen.std(1) > .3),:]
+
+        self.data_min = expr_genes.min().numpy()
+        self.data_max = expr_genes.max().numpy()
+
+        self.S = S
+        self.data = dataset_utils.discretize_data(expr_genes, S).to(device)
+
+    def __len__(self):
+        return self.data.shape[0]
+
+    def __getitem__(self, index):
+
+        return self.data[index]
+    
+    def rescale(self, d):
+        """
+        Rescale discretized data back to original range.
+        """
+        return d / self.S * (self.data_max - self.data_min) + self.data_min
+    
+@dataset_utils.register_dataset
+class DiscreteAEMET(Dataset):
+    def __init__(self, cfg, device):
+
+        if cfg.data.use_absorbing:
+            S = cfg.data.S - 1
+        else:
+            S = cfg.data.S
+
+        data_raw = pd.read_csv(cfg.data.path, index_col=0)
+        data = torch.tensor(data_raw.values).squeeze()
+
+        min_data = torch.min(data)
+        max_data = torch.max(data)
+        rescaled_data = 6 * (data - min_data) / (max_data - min_data) - 3
+        n_repeat = 50
+        rescaled_data_repeated = rescaled_data.repeat(n_repeat, 1)
+
+        self.data_min = -3.0
+        self.data_max = 3.0
+
+        self.S = S
+        self.data = dataset_utils.discretize_data(rescaled_data_repeated, S).to(device)
+
+    def __len__(self):
+        return self.data.shape[0]
+
+    def __getitem__(self, index):
+
+        return self.data[index]
+    
+    def rescale(self, d):
+        """
+        Rescale discretized data back to original range.
+        """
+        return d / self.S * (self.data_max - self.data_min) + self.data_min

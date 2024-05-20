@@ -640,7 +640,7 @@ class AbsorbingHollowSequenceTransformer(HollowSequenceTransformer, AbsorbingFor
         AbsorbingForwardBase.__init__(self, cfg, device)
 
 @model_utils.register_model
-class AbsorbingHollowSequenceTransformerFlash(EMA, HollowSequenceTransformerFlash, AbsorbingForwardBase):
+class AbsorbingHollowSequenceTransformerFlashEMA(EMA, HollowSequenceTransformerFlash, AbsorbingForwardBase):
     def __init__(self, cfg, device, rank=None):
         EMA.__init__(self, cfg)
         HollowSequenceTransformerFlash.__init__(self, cfg, device, rank)

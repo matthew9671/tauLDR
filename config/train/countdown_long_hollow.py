@@ -4,7 +4,7 @@ def get_config():
     save_directory = '/home/groups/swl1/yixiuz/torch_fid/experiments/countdown'
 
     config = ml_collections.ConfigDict()
-    config.experiment_name = 'countdown_one_hot'
+    config.experiment_name = 'countdown_long'
     config.save_location = save_directory
 
     config.device = 'cuda'
@@ -20,7 +20,7 @@ def get_config():
 
     config.training = training = ml_collections.ConfigDict()
     training.train_step_name = 'Standard'
-    training.n_iters = 100000 # 20-50K should be enough for this
+    training.n_iters = 150000 # 20-50K should be enough for this
     training.clip_grad = True
     training.warmup = 5000
 
@@ -31,23 +31,23 @@ def get_config():
     data.data_size = 6400
     data.batch_size = 64
     data.shuffle = True
-    data.shape = [256]
+    data.shape = [1024]
 
     config.model = model = ml_collections.ConfigDict()
-    model.name = 'AbsorbingHollowSequenceTransformer'
+    model.name = 'AbsorbingHollowSequenceTransformerFlashEMA'
 
     model.num_layers = 6
     model.d_model = 128
     model.num_heads = 8
-    model.dim_feedforward = 512
+    model.dim_feedforward = 1024
     model.dropout = 0.1
-    model.temb_dim = 64
+    model.temb_dim = 128
     model.num_output_FFresiduals = 2
     model.num_layers_per_mixed = 3
     model.time_scale_factor = 1000
     model.use_one_hot_input = True
 
-    # model.ema_decay = 0.9999
+    model.ema_decay = 0.9999
 
     # model.rate_const = 0.03
     model.rate_eps = 1e-3 # Instead of rate_const we have rate_eps for the log

@@ -1,10 +1,10 @@
 import ml_collections
 
 def get_config():
-    save_directory = '/home/groups/swl1/yixiuz/torch_fid/experiments/countdown'
+    save_directory = '/home/groups/swl1/yixiuz/torch_fid/experiments/genes'
 
     config = ml_collections.ConfigDict()
-    config.experiment_name = 'countdown_one_hot'
+    config.experiment_name = 'genes_hollow'
     config.save_location = save_directory
 
     config.device = 'cuda'
@@ -20,26 +20,26 @@ def get_config():
 
     config.training = training = ml_collections.ConfigDict()
     training.train_step_name = 'Standard'
-    training.n_iters = 100000 # 20-50K should be enough for this
+    training.n_iters = 5000 # Original paper used 5M parameters, 20 epochs of 10 iterations
     training.clip_grad = True
-    training.warmup = 5000
+    training.warmup = 100
 
     config.data = data = ml_collections.ConfigDict()
-    data.name = 'Countdown'
-    data.S = 32+1
+    data.name = 'DiscreteGenes'
+    data.path = '/home/groups/swl1/yixiuz/torch_fid/downloads/full_genes.pt'
+    data.S = 64+1
     data.use_absorbing = True # The actual state size is S-1
-    data.data_size = 6400
-    data.batch_size = 64
+    data.batch_size = 16
     data.shuffle = True
-    data.shape = [256]
+    data.shape = [60]
 
     config.model = model = ml_collections.ConfigDict()
-    model.name = 'AbsorbingHollowSequenceTransformer'
+    model.name = 'AbsorbingHollowSequenceTransformerFlashEMA'
 
     model.num_layers = 6
     model.d_model = 128
     model.num_heads = 8
-    model.dim_feedforward = 512
+    model.dim_feedforward = 1024
     model.dropout = 0.1
     model.temb_dim = 64
     model.num_output_FFresiduals = 2
@@ -47,7 +47,7 @@ def get_config():
     model.time_scale_factor = 1000
     model.use_one_hot_input = True
 
-    # model.ema_decay = 0.9999
+    model.ema_decay = 0.9999
 
     # model.rate_const = 0.03
     model.rate_eps = 1e-3 # Instead of rate_const we have rate_eps for the log
@@ -65,7 +65,7 @@ def get_config():
     saving.enable_preemption_recovery = False
     saving.preemption_start_day_YYYYhyphenMMhyphenDD = None
 
-    saving.checkpoint_freq = 1000
+    saving.checkpoint_freq = 500
     saving.num_checkpoints_to_keep = 2
     saving.checkpoint_archive_freq = 20000000
     saving.log_low_freq = 1000

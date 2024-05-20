@@ -36,16 +36,16 @@ def get_config():
     data.shape = [256]
 
     config.model = model = ml_collections.ConfigDict()
-    model.name = 'AbsorbingHollowSequenceTransformerFlash'
+    model.name = 'AbsorbingHollowSequenceTransformerFlashEMA'
 
     model.num_layers = 6
-    model.d_model = 128
+    model.d_model = 64
     model.num_heads = 8
-    model.dim_feedforward = 1024
+    model.dim_feedforward = 2048
     model.dropout = 0.1
     model.temb_dim = 128
     model.num_output_FFresiduals = 2
-    model.num_layers_per_mixed = 3
+    model.num_layers_per_mixed = 2
     model.time_scale_factor = 1000
     model.use_one_hot_input = True
 
