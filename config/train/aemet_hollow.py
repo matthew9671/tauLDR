@@ -1,10 +1,10 @@
 import ml_collections
 
 def get_config():
-    save_directory = '/home/groups/swl1/yixiuz/torch_fid/experiments/genes'
+    save_directory = '/home/groups/swl1/yixiuz/torch_fid/experiments/aemet'
 
     config = ml_collections.ConfigDict()
-    config.experiment_name = 'genes_baseline_deeper'
+    config.experiment_name = 'aemet_hollow'
     config.save_location = save_directory
 
     config.device = 'cuda'
@@ -25,25 +25,25 @@ def get_config():
     training.warmup = 100
 
     config.data = data = ml_collections.ConfigDict()
-    data.name = 'DiscreteGenes'
-    data.path = '/home/groups/swl1/yixiuz/torch_fid/downloads/full_genes.pt'
+    data.name = 'DiscreteAEMET'
+    data.path = '/home/groups/swl1/yixiuz/torch_fid/downloads/aemet.csv'
     data.S = 64+1
     data.use_absorbing = True # The actual state size is S-1
-    data.batch_size = 16
+    data.batch_size = 73
     data.shuffle = True
-    data.shape = [60]
+    data.shape = [365]
 
     config.model = model = ml_collections.ConfigDict()
-    model.name = 'AbsorbingSequenceTransformerEMA' # 'AbsorbingHollowSequenceTransformerFlashEMA'
+    model.name = 'AbsorbingHollowSequenceTransformerFlashEMA'
 
-    model.num_layers = 8
+    model.num_layers = 12
     model.d_model = 128
-    model.num_heads = 8
-    model.dim_feedforward = 2048
+    model.num_heads = 16
+    model.dim_feedforward = 1024
     model.dropout = 0.1
-    model.temb_dim = 64
+    model.temb_dim = 128
     model.num_output_FFresiduals = 2
-    model.num_layers_per_mixed = 2
+    model.num_layers_per_mixed = 3
     model.time_scale_factor = 1000
     model.use_one_hot_input = True
 

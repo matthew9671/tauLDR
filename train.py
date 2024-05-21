@@ -91,9 +91,10 @@ def main(cfg, custom_name=None):
 
     exit_flag = False
 
-
+    pbar = tqdm(total=cfg.training.n_iters)
+    tqdm._instances.clear()
     while True:
-        for minibatch in tqdm(dataloader):
+        for minibatch in dataloader:
 
             training_step.step(state, minibatch, loss, writer)
 
@@ -107,6 +108,7 @@ def main(cfg, custom_name=None):
                            minibatch=minibatch, dataset=dataset)
 
             state['n_iter'] += 1
+            pbar.update(1)
             if state['n_iter'] > cfg.training.n_iters - 1:
                 exit_flag = True
                 break
@@ -132,6 +134,8 @@ if __name__ == "__main__":
         from config.train.piano_hollow import get_config
     elif args.config == 'countdown':
         from config.train.countdown import get_config
+    elif args.config == 'countdown_long':
+        from config.train.countdown_long_hollow import get_config
     else:
         raise NotImplementedError
 
