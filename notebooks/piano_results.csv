@@ -1,0 +1,4 @@
+method,g_steps,tau_steps,use_corrector,corrector,c_stepsize,c_steps,nfe,h_dist,outlier_rate
+tauleaping,0,50,True,mpf,1.0,1,95.0,0.3794871595882483,0.12499197070914697
+tauleaping,0,50,True,mpf,1.0,1,95.0,0.3780450319462578,0.12188062050359712
+tauleaping,0,50,True,mpf,1.0,1,95.0,0.3792639253193196,0.12286420863309352
