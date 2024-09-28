@@ -491,7 +491,7 @@ class ConditionalAux():
         return neg_elbo + self.nll_weight * nll
 
 @losses_utils.register_loss
-class ConditionalAuxSimplified():
+class GenericAuxSimplified():
     def __init__(self, cfg):
         self.cfg = cfg
         self.ratio_eps = cfg.loss.eps_ratio
@@ -608,69 +608,44 @@ class ConditionalAuxSimplified():
             (p0t_sig / qt0_denom_sig) @ qt0_numer_sig + self.ratio_eps
         ) # (B, d, S)
 
+        log_score_from_x = inner_log_sig
 
-        x_tilde_mask = torch.ones((B,d,S), device=device)
-        x_tilde_mask[
+        log_score_to_x = log_score_from_x[
             torch.arange(B, device=device).repeat_interleave(d),
-            torch.arange(d, device=device).repeat(B),
+            torch.arange(d, device=device).repeat(N),
             x_tilde.long().flatten()
-        ] = 0.0
+        ].view(B,d)
 
-        outer_rate_sig = rate[
-            torch.arange(B, device=device).repeat_interleave(d*S),
-            torch.arange(S, device=device).repeat(B*d),
-            x_tilde.long().flatten().repeat_interleave(S)
-        ].view(B,d,S)
+        # TODO: from the log score function, find the actual score functions from the masked state to the non-masked state 
 
-        outer_sum_sig = torch.sum(
-            x_tilde_mask * outer_rate_sig * (outer_qt0_numer_sig / outer_qt0_denom_sig.view(B,d,1)) * inner_log_sig,
-            dim=(1,2)
-        )
-
-        # # now getting the 2nd term normalization
-
-        # rate_row_sums = - rate[
-        #     torch.arange(B, device=device).repeat_interleave(S),
-        #     torch.arange(S, device=device).repeat(B),
-        #     torch.arange(S, device=device).repeat(B)
-        # ].view(B, S)
-
-        # base_Z_tmp = rate_row_sums[
+        # x_tilde_mask = torch.ones((B,d,S), device=device)
+        # x_tilde_mask[
         #     torch.arange(B, device=device).repeat_interleave(d),
+        #     torch.arange(d, device=device).repeat(B),
         #     x_tilde.long().flatten()
-        # ].view(B, d)
-        # base_Z = torch.sum(base_Z_tmp, dim=1)
+        # ] = 0.0
 
-        # Z_subtraction = base_Z_tmp # (B,d)
-        # Z_addition = rate_row_sums
-
-        # Z_sig_norm = base_Z.view(B, 1, 1) - \
-        #     Z_subtraction.view(B, d, 1) + \
-        #     Z_addition.view(B, 1, S)
-
-        # rate_sig_norm = rate[
+        # outer_rate_sig = rate[
         #     torch.arange(B, device=device).repeat_interleave(d*S),
         #     torch.arange(S, device=device).repeat(B*d),
         #     x_tilde.long().flatten().repeat_interleave(S)
-        # ].view(B, d, S)
+        # ].view(B,d,S)
 
-        # # qt0 is (B,S,S)
-        # qt0_sig_norm_numer = qt0[
-        #     torch.arange(B, device=device).repeat_interleave(d*S),
-        #     data.long().flatten().repeat_interleave(S),
-        #     torch.arange(S, device=device).repeat(B*d)
-        # ].view(B, d, S)
+        # We actually want the rate from the other direction
+        outer_rate_sig = rate[
+            torch.arange(B, device=device).repeat_interleave(d*S),
+            x_tilde.long().flatten()
+        ].view(B,d,S)
 
-        # qt0_sig_norm_denom = qt0[
-        #     torch.arange(B, device=device).repeat_interleave(d),
-        #     data.long().flatten(),
-        #     x_tilde.long().flatten()
-        # ].view(B, d) + self.ratio_eps
-
-        # sig_norm = torch.sum(
-        #     (rate_sig_norm * qt0_sig_norm_numer * x_tilde_mask) / (Z_sig_norm * qt0_sig_norm_denom.view(B,d,1)),
+        # outer_sum_sig = torch.sum(
+        #     x_tilde_mask * outer_rate_sig * (outer_qt0_numer_sig / outer_qt0_denom_sig.view(B,d,1)) * inner_log_sig,
         #     dim=(1,2)
         # )
+
+        outer_sum_sig = torch.sum(
+            outer_rate_sig[:,:,S-1] * log_score_to_x,
+            dim=1
+        )
 
         sig_mean = torch.mean(-outer_sum_sig)
         reg_mean = torch.mean(reg_term)
