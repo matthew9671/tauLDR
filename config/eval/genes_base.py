@@ -2,8 +2,8 @@ import ml_collections
 
 def get_config():
 
-    model_location = '/home/groups/swl1/yixiuz/torch_fid/experiments/genes/2024-05-19/17-26-17_genes_baseline/checkpoints/ckpt_0000004999.pt'
-    model_config_location = '/home/groups/swl1/yixiuz/torch_fid/experiments/genes/2024-05-19/17-26-17_genes_baseline/config/config_001.yaml'
+    model_location = '/home/groups/swl1/yixiuz/torch_fid/experiments/genes/2024-05-19/19-27-56_genes_baseline_deeper/checkpoints/ckpt_0000004999.pt'
+    model_config_location = '/home/groups/swl1/yixiuz/torch_fid/experiments/genes/2024-05-19/19-27-56_genes_baseline_deeper/config/config_001.yaml'
 
     config = ml_collections.ConfigDict()
     config.eval_name = 'genes'

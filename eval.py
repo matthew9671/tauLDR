@@ -1,5 +1,6 @@
 import numpy as np
 from scipy.stats import skew, kurtosis
+from scipy.fftpack import dct
 import pandas as pd
 import os
 
@@ -34,8 +35,7 @@ def outliers(ref, sample, S=129):
     sample_dist = get_dist(sample, S)
     return np.sum((1 - ref_mask) * sample_dist)
 
-# TODO: add autocorrelation?
-def eval_mse_stats(dataset, samples):
+def eval_mse_stats(dataset, samples, S):
     
     true_samples = dataset.data.cpu().numpy()
     samples = np.clip(samples, 0, S-2)
@@ -61,7 +61,34 @@ def eval_mse_stats(dataset, samples):
            - kurtosis(true_samples_scaled))**2
         ),
     }
+    return out
 
+def eval_dct_mse_stats(dataset, samples, S):
+    samples = np.clip(samples, 0, S-2)
+    scaled_samples = dataset.rescale(samples)
+    scaled_data = dataset.rescale(dataset.data.cpu()).numpy()
+    
+    true_samples_scaled = dct(scaled_data, type=2, norm='ortho')
+    samples_scaled = dct(scaled_samples, type=2, norm='ortho')
+
+    out = {
+        "mean": np.mean(
+            (np.mean(samples_scaled, axis=0) 
+           - np.mean(true_samples_scaled, axis=0))**2
+        ),
+        "variance": np.mean(
+            (np.var(samples_scaled, axis=0) 
+           - np.var(true_samples_scaled, axis=0))**2
+        ),
+        "skewness": np.mean(
+            (skew(samples_scaled) 
+           - skew(true_samples_scaled))**2
+        ),
+        "kurtosis": np.mean(
+            (kurtosis(samples_scaled) 
+           - kurtosis(true_samples_scaled))**2
+        ),
+    }
     return out
 
 def save_results(new_results, file_name):
